@@ -3,6 +3,7 @@
 import warnings
 from sklearn.model_selection import KFold
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
 import seaborn as sns
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import StandardScaler
@@ -19,9 +20,11 @@ warnings.filterwarnings("ignore")
 
 # %%
 
-# ====================================
+print("""
+# ================================================
 # 1. PREPROCESSING
-# ====================================
+# ================================================
+""")
 
 # Loading data
 df = pd.read_csv("vaccine response.csv")
@@ -61,9 +64,10 @@ print("Dimension of the final data set:", df.shape)
 
 # %%
 
-# ====================================
+print("""
+# ================================================
 # 2. INFERENCES
-# ====================================
+# ================================================ """)
 
 data = df.copy()
 
@@ -88,8 +92,8 @@ logit = sm.Logit(y, X_int).fit()
 
 # Significant variables (p <= 0.05) and interpretation
 
-print(
-    """
+print("""
+
 Interpretation of Results
 -------------------------
 
@@ -164,12 +168,13 @@ VEGF:
 
 # %%
 
-# ====================================
+print("""
+# ================================================
 # 3. TREES
-# ====================================
+# ================================================ """)
 
 # Encoding response variable
-encoding = {"NVR": 1, "LVR": 2, "HVR": 3}
+encoding = {"LVR": 1, "NVR": 2, "HVR": 3}
 df_trees = df.copy()
 df_trees["VR"] = df_trees["VR"].replace(encoding)
 
@@ -190,13 +195,13 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 # -------
 
 # Defining Grid Search Hyperparams
-bagging_gs = {"n_estimators": [100, 200, 300, 400, 500],
-              "max_depth": [2, 4, 6, 8, 10]}
+bagging_gs = {"n_estimators": [100, 150, 200, 250, 300, 350, 400, 450, 500],
+              "max_depth": [2, 3, 4, 5, 6, 7, 8, 9, 10]}
 
 # Grid Search
 bg_clf_train = GridSearchCV(
     RandomForestClassifier(
-        min_samples_leaf=5,
+        min_samples_leaf=10,
         max_features=None,
         random_state=1
     ),
@@ -226,7 +231,7 @@ Test Accuracy: {round(accuracy_score(y_test, y_pred), 4)}
 bg_clf_best = RandomForestClassifier(
     **bg_clf_train.best_params_,
     max_features=None,
-    min_samples_leaf=5,
+    min_samples_leaf=10,
     random_state=1,
 )
 
@@ -257,13 +262,13 @@ trees = [["Bagging", round(accuracy_score(y_test, y_pred), 4)]]
 # -------------
 
 # Defining Grid Search Hyperparams
-random_gs = {"n_estimators": [100, 200, 300, 400, 500],
-             "max_depth": [2, 4, 6, 8, 10]}
+random_gs = {'n_estimators': [100, 150, 200, 250, 300, 350, 400, 450, 500],
+           'max_depth': [2, 4, 6, 8, 10, 12, 14, 16, 18]}
 
 # Grid Search
 rnd_clf_train = GridSearchCV(
     RandomForestClassifier(
-        min_samples_leaf=5, max_features=None, random_state=1),
+        min_samples_leaf=10, max_features=None, random_state=1),
     param_grid=random_gs,
     cv=5,
     scoring="accuracy",
@@ -290,7 +295,7 @@ Test Accuracy: {round(accuracy_score(y_test, y_pred), 4)}
 rnd_clf_best = RandomForestClassifier(
     **rnd_clf_train.best_params_,
     max_features=None,
-    min_samples_leaf=5,
+    min_samples_leaf=10,
     random_state=1,
 )
 
@@ -370,9 +375,11 @@ The best model to select based on accuracy is the Boosting Tree model.
 
 # %%
 
-# ====================================
+print("""
+# ================================================
 # 4. PCA
-# ====================================
+# ================================================
+""")
 
 # (a) Reload the original data set, impute missing values, and
 # drop the Age and VR variables.
@@ -397,7 +404,9 @@ df_pca["TNF.a"] = pd.to_numeric(df_pca["TNF.a"], errors="coerce")
 df_pca.fillna(df_pca.min(), inplace=True)
 
 # Drop variables Age and VR
-df_pca = df_pca.drop(['Age', 'VR'], axis=1)
+X = df_pca.copy()
+X = X.drop(["Age", "VR"], axis=1)
+y = df_pca["VR"]
 
 
 # %%%
@@ -406,24 +415,33 @@ df_pca = df_pca.drop(['Age', 'VR'], axis=1)
 # ------------------------------------------------------------
 
 scaler = StandardScaler()
-df_pca = scaler.fit_transform(df_pca)
+X_scaled = scaler.fit_transform(X)
 
 # Instantiate and fit PCA
 pca = PCA()
-pca.fit(df_pca)
+pca.fit(X_scaled)
 
-# Perform PCA
-pca = PCA(n_components=2)
-principal_components = pca.fit_transform(df_pca)
+# Explained Variance Ratio
+evr = pca.explained_variance_ratio_
 
-# Scree plot
-plt.plot(range(1, len(pca.explained_variance_ratio_) + 1),
-         pca.explained_variance_ratio_)
-plt.xlabel('Principal Component')
-plt.ylabel('Explained Variance Ratio')
-plt.title('Scree Plot')
+# EVR Scree plot
+plt.plot(range(1, len(evr)+1), evr)
+plt.xlabel("Number of components")
+plt.ylabel("Proportion Variance Explained")
+plt.title("EVR Scree Plot")
 plt.show()
 
+# Cumulative EVR Scree plot
+plt.plot(range(1, len(evr)+1), np.cumsum(evr))
+plt.xlabel("Number of Components")
+plt.ylabel("Cumulative Proportion Variance Explained")
+plt.title("Cumulative EVR Scree Plot")
+plt.show()
+
+print("""
+Looks like there is not a clear elbow in the cumulative plot. The 
+variability is spread out evenly across the predictor space.
+""")
 
 # %%%
 
@@ -431,41 +449,44 @@ plt.show()
 # variability?
 # ------------------------------------------------------------
 
-cumulative_variance_ratio = np.cumsum(pca.explained_variance_ratio_)
-num_components = np.argmax(cumulative_variance_ratio >= 0.9) + 1
+pca = PCA(0.9)
+pca.fit(X_scaled)
+X_trans = pca.transform(X_scaled)
 
-print("Principal Components for 90% Variability:", num_components)
+print(f"""
+Principal Components for 90% Variability:  {X_trans.shape[1]}
+
+It went from {X.shape[1]} to {X_trans.shape[1]} components.""")
 
 
 # %%%
 
 # (d) Plot the data set using the first two principal component
-# PC1 and PC2. Color the data point using a color code of your
-# choice (i.e LVR=red, NVR=green, HVR=blue).
+# PC1 and PC2. Color the data point using a color code of your choice.
 # ------------------------------------------------------------
 
-# Perform PCA
-pca = PCA(n_components=2)  # Set the number of components to 2
-principal_components = pca.fit_transform(df_pca)
+# Colors LVR=red, NVR=green, HVR=blue
+colors = ListedColormap(["#EA526F", "#51A3A3", "#235789"])
 
-# Create a DataFrame with the principal components
-principal_df = pd.DataFrame(data=principal_components, columns=['PC1', 'PC2'])
+# Enconding the response variables to a numeric value
+enc = {"LVR": 0, "NVR": 1, "HVR": 2}
+y = y.replace(enc)
 
-# Define color codes for PC1 and PC2
-color_pc1 = 'blue'
-color_pc2 = 'red'
-
-# Plot the data points
-plt.scatter(principal_df['PC1'], principal_df['PC2'], c=[
-            color_pc1 if x else color_pc2 for x in principal_df['PC1'] > 0])
-plt.xlabel('PC1')
-plt.ylabel('PC2')
-plt.title('Data Set - PC1 vs. PC2')
+# Plot
+scatter = plt.scatter(X_trans[:, 0], X_trans[:, 1], c=y, cmap=colors, alpha=0.65)
+plt.legend(handles=scatter.legend_elements()[0], labels=list(enc.keys()))
+plt.grid(alpha=0.1)
+plt.xlabel("PC 1")
+plt.ylabel("PC 2")
+plt.title("First 2 PCs by VR")
 plt.show()
+
+print("It appears that there is not a clearly defined separation \nbetween the classes.")
 
 
 # %%
 
+print("""
 # ====================================
 # EXTRA CREDIT
 # ====================================
@@ -476,7 +497,7 @@ plt.show()
 # This includes all steps of training-validating-testing split,
 # tune parameter…Is there any variable
 # (cytokine) that stands out?
-# ------------------------------------------------------------
+# ------------------------------------------------------------ """)
 
 
 def load_df_extra():
@@ -581,34 +602,19 @@ lr_l1(df_extra)
 print("""SUMMARY
 -------
 
-Performance:
+In scenario (a), where NVR is dropped and the classification task 
+becomes binary between LVR and HVR, the logistic regression model 
+achieves an accuracy of 0.5 on both the train and test sets. This 
+accuracy indicates that the model is performing at chance level, 
+meaning it's not able to effectively distinguish between the two 
+classes. 
 
-The accuracy results indicate that scenario (b) (NVR vs. HVR) 
-performed better on the test set compared to scenario (a) 
-(LVR vs. HVR). This suggests that dropping the LVR class and 
-performing binary classification between NVR and HVR led to a 
-more effective model in this case.
-
-It's important to note that the train set accuracy for scenario 
-(b) was relatively low, indicating that the model might have 
-struggled to capture the patterns in the training data. However, 
-the model's generalization performance on the test set improved 
-significantly, suggesting that it was able to identify relevant 
-patterns and perform well on unseen data.
-
-Significant Features:
-
-Overlapping Features-. IL.8 and IL.17A appear as significant 
-features in both scenarios. However, their coefficients and 
-their associations with the classes are different. In scenario 
-(a), IL.8 has a positive coefficient, indicating a positive 
-association with the HVR class, while in scenario (b), IL.8 
-also has a positive coefficient, suggesting its positive 
-association with the NVR class.
-
-Unique Features-. Some features are unique to each scenario. 
-In scenario (a), features such as TNF.a, IL.12..p40., IFN.a2, 
-MDC, sCD40L, MCP.3, and Eotaxin are significant, while in 
-scenario (b), features like IFN.g, MIP.1b, MCP.1, IL.15, IL.7, 
-TGF.a, and GM.CSF are significant.
+In scenario (b), where LVR is dropped and the classification task 
+becomes binary between NVR and HVR, the logistic regression model 
+achieves an accuracy of 0.1538 on both the train and test sets. 
+Similarly to scenario (a), this accuracy is also indicative of poor 
+performance, as the model is not able to effectively distinguish 
+between the two classes. 
 """)
+
+# %%
